@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Octra Wallet</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body class="flex items-center justify-center min-h-screen p-4 bg-gray-100">
+    <div class="bg-white p-8 rounded-3xl shadow-2xl w-full max-w-lg">
+        <h1 class="text-5xl font-extrabold text-center text-gray-900 mb-4 tracking-tight">
+            <span class="bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-indigo-700">
+                Octra Wallet
+            </span>
+        </h1>
+        <p class="text-center text-gray-600 mb-8">Secure and private transactions</p>
+
+        <!-- Load Wallet View -->
+        <div id="welcome-view" class="view">
+            <div class="mb-6">
+                <label for="private_key" class="block text-gray-700 text-lg font-medium mb-2">Private Key (Base64):</label>
+                <div class="relative flex items-center">
+                    <input
+                        type="password"
+                        id="private_key"
+                        placeholder="Enter base64 private key"
+                        class="w-full pl-5 pr-14 py-3.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-4 focus:ring-indigo-300 focus:border-indigo-500 text-gray-800 transition-all duration-300 placeholder-gray-400 text-base shadow-sm"
+                    />
+                    <button
+                        id="toggleVisibility"
+                        class="absolute right-2.5 p-2 text-gray-500 hover:text-gray-700"
+                        type="button"
+                        aria-label="Toggle password visibility"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                        </svg>
+                    </button>
+                </div>
+            </div>
+            <div class="flex flex-col sm:flex-row gap-4 mb-6">
+                <button
+                    id="loadButton"
+                    class="flex-1 bg-gradient-to-r from-blue-600 to-indigo-600 text-white py-3.5 rounded-xl font-bold text-lg hover:from-blue-700 hover:to-indigo-700 focus:outline-none focus:ring-3 focus:ring-blue-500 focus:ring-offset-2 transition-all duration-300 shadow-lg"
+                >
+                    Load Wallet
+                </button>
+                <button
+                    id="generateButton"
+                    class="flex-1 bg-gray-200 text-gray-800 py-3.5 rounded-xl font-bold text-lg hover:bg-gray-300 focus:outline-none focus:ring-3 focus:ring-gray-400 focus:ring-offset-2 transition-colors duration-200 shadow-md"
+                >
+                    Generate New
+                </button>
+            </div>
+            <div id="loadingIndicator" class="hidden flex items-center justify-center mt-6 text-indigo-600 font-semibold space-x-3">
+                <div class="spinner"></div>
+                <span>Loading Wallet...</span>
+            </div>
+            <div id="errorMessage" class="hidden text-center mt-6 p-4 rounded-xl bg-red-50 border border-red-300 text-red-700 font-medium transition-all duration-300 text-base shadow-sm">
+            </div>
+            <div id="successMessage" class="hidden text-center mt-6 p-4 rounded-xl bg-green-50 border border-green-300 text-green-700 font-medium transition-all duration-300 text-base shadow-sm">
+            </div>
+        </div>
+
+        <!-- Wallet View -->
+        <div id="wallet-view" class="view hidden">
+            <div class="mb-6">
+                <h2 class="text-3xl font-bold text-gray-800 mb-4 border-b pb-3 border-indigo-100">Wallet Information</h2>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-y-4 gap-x-6 text-gray-700">
+                    <p><span class="font-semibold text-gray-800">Address:</span> <span id="address" class="text-gray-900 font-mono text-sm ml-2 break-all"></span> <button onclick="copyToClipboard('address')" class="text-blue-500 hover:text-blue-700 text-sm ml-2">Copy</button></p>
+                    <p><span class="font-semibold text-gray-800">Balance:</span> <span id="balance" class="text-gray-900 font-mono text-lg ml-2">N/A</span></p>
+                    <p><span class="font-semibold text-gray-800">Encrypted:</span> <span id="encrypted" class="text-gray-900 font-mono text-lg ml-2">N/A</span></p>
+                    <p><span class="font-semibold text-gray-800">Nonce:</span> <span id="nonce" class="text-gray-900 text-lg ml-2">N/A</span></p>
+                    <p><span class="font-semibold text-gray-800">Pending Txs:</span> <span id="pending_txs" class="text-gray-900 text-lg ml-2">0</span></p>
+                </div>
+                <button
+                    onclick="refreshWallet()"
+                    class="mt-4 bg-green-600 text-white px-4 py-2 rounded-xl font-bold text-lg hover:bg-green-700 focus:outline-none focus:ring-3 focus:ring-green-500 focus:ring-offset-2 transition-all duration-300 shadow-md"
+                >
+                    Refresh Balance
+                </button>
+            </div>
+
+            <!-- Tabs -->
+            <div class="mb-6">
+                <div class="flex border-b border-gray-200">
+                    <button id="send-tab" class="px-4 py-2 font-medium text-gray-700 border-b-2 border-indigo-500 text-indigo-600 focus:outline-none">
+                        Send
+                    </button>
+                    <button id="private-tab" class="px-4 py-2 font-medium text-gray-500 hover:text-gray-700 focus:outline-none">
+                        Private
+                    </button>
+                    <button id="encrypt-tab" class="px-4 py-2 font-medium text-gray-500 hover:text-gray-700 focus:outline-none">
+                        Encrypt
+                    </button>
+                    <button id="claim-tab" class="px-4 py-2 font-medium text-gray-500 hover:text-gray-700 focus:outline-none">
+                        Claim
+                    </button>
+                </div>
+                
+                <!-- Send Transaction Form -->
+                <div id="send-form-view" class="pt-4 space-y-4">
+                    <div>
+                        <label for="to_address" class="block text-gray-700 text-lg font-medium mb-2">To Address:</label>
+                        <input
+                            type="text"
+                            id="to_address"
+                            class="w-full pl-5 py-3.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-4 focus:ring-indigo-300 focus:border-indigo-500 text-gray-800 transition-all duration-300 placeholder-gray-400 text-base shadow-sm"
+                            placeholder="oct..."
+                            required
+                        />
+                    </div>
+                    <div>
+                        <label for="amount" class="block text-gray-700 text-lg font-medium mb-2">Amount (OCT):</label>
+                        <input
+                            type="number"
+                            step="0.000001"
+                            id="amount"
+                            class="w-full pl-5 py-3.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-4 focus:ring-indigo-300 focus:border-indigo-500 text-gray-800 transition-all duration-300 placeholder-gray-400 text-base shadow-sm"
+                            placeholder="0.0"
+                            required
+                        />
+                    </div>
+                    <button
+                        type="submit"
+                        id="send-button"
+                        class="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white py-3.5 rounded-xl font-bold text-lg hover:from-blue-700 hover:to-indigo-700 focus:outline-none focus:ring-3 focus:ring-blue-500 focus:ring-offset-2 transition-all duration-300 shadow-lg"
+                    >
+                        Send Transaction
+                    </button>
+                </div>
+                
+                <!-- Private Transfer Form -->
+                <div id="private-form-view" class="pt-4 space-y-4 hidden">
+                    <div>
+                        <label for="private_to" class="block text-gray-700 text-lg font-medium mb-2">To Address:</label>
+                        <input
+                            type="text"
+                            id="private_to"
+                            class="w-full pl-5 py-3.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-4 focus:ring-indigo-300 focus:border-indigo-500 text-gray-800 transition-all duration-300 placeholder-gray-400 text-base shadow-sm"
+                            placeholder="oct..."
+                            required
+                        />
+                    </div>
+                    <div>
+                        <label for="private_amount" class="block text-gray-700 text-lg font-medium mb-2">Amount (OCT):</label>
+                        <input
+                            type="number"
+                            step="0.000001"
+                            id="private_amount"
+                            class="w-full pl-5 py-3.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-4 focus:ring-indigo-300 focus:border-indigo-500 text-gray-800 transition-all duration-300 placeholder-gray-400 text-base shadow-sm"
+                            placeholder="0.0"
+                            required
+                        />
+                    </div>
+                    <button
+                        id="private-send-button"
+                        class="w-full bg-purple-600 text-white py-3.5 rounded-xl font-bold text-lg hover:bg-purple-700 focus:outline-none focus:ring-3 focus:ring-purple-500 focus:ring-offset-2 transition-all duration-300 shadow-lg"
+                    >
+                        Send Privately
+                    </button>
+                </div>
+                
+                <!-- Encrypt Balance Form -->
+                <div id="encrypt-form-view" class="pt-4 space-y-4 hidden">
+                    <div>
+                        <label for="encrypt_amount" class="block text-gray-700 text-lg font-medium mb-2">Amount to Encrypt (OCT):</label>
+                        <input
+                            type="number"
+                            step="0.000001"
+                            id="encrypt_amount"
+                            class="w-full pl-5 py-3.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-4 focus:ring-indigo-300 focus:border-indigo-500 text-gray-800 transition-all duration-300 placeholder-gray-400 text-base shadow-sm"
+                            placeholder="0.0"
+                            required
+                        />
+                    </div>
+                    <button
+                        id="encrypt-button"
+                        class="w-full bg-indigo-600 text-white py-3.5 rounded-xl font-bold text-lg hover:bg-indigo-700 focus:outline-none focus:ring-3 focus:ring-indigo-500 focus:ring-offset-2 transition-all duration-300 shadow-lg"
+                    >
+                        Encrypt Balance
+                    </button>
+                </div>
+                
+                <!-- Claim Transfers -->
+                <div id="claim-form-view" class="pt-4 space-y-4 hidden">
+                    <div id="pending-transfers" class="max-h-40 overflow-y-auto">
+                        <!-- Pending transfers will be loaded here -->
+                    </div>
+                    <div class="hidden" id="no-pending-transfers">
+                        <p class="text-center text-gray-500 py-4">No pending transfers</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Transaction History -->
+            <div class="mb-6">
+                <h2 class="text-3xl font-bold text-gray-800 mb-4 border-b pb-3 border-indigo-100">Transaction History</h2>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left">
+                        <thead>
+                            <tr class="bg-gray-100">
+                                <th class="p-3">Time</th>
+                                <th class="p-3">Type</th>
+                                <th class="p-3">Amount</th>
+                                <th class="p-3">To/From</th>
+                                <th class="p-3">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="transactions">
+                            <!-- Transactions will be loaded here -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <button
+                onclick="resetWallet()"
+                class="w-full bg-gray-200 text-gray-800 py-3.5 rounded-xl font-bold text-lg hover:bg-gray-300 focus:outline-none focus:ring-3 focus:ring-gray-400 focus:ring-offset-2 transition-colors duration-200 shadow-md"
+            >
+                Reset Wallet
+            </button>
+        </div>
+
+        <!-- Confirmation Modal -->
+        <div id="confirmation-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden">
+            <div class="bg-white p-8 rounded-3xl shadow-2xl w-full max-w-md border border-gray-100">
+                <h2 class="text-3xl font-bold text-gray-800 mb-6">Confirm Transaction</h2>
+                <p class="text-gray-700 mb-6">Are you sure you want to send <span id="confirm-amount"></span> OCT to <span id="confirm-address"></span>?</p>
+                <div class="flex justify-end gap-4">
+                    <button
+                        onclick="cancelTransaction()"
+                        class="bg-gray-200 text-gray-800 py-2 px-4 rounded-xl font-bold hover:bg-gray-300 focus:outline-none focus:ring-3 focus:ring-gray-400 focus:ring-offset-2 transition-colors duration-200 shadow-md"
+                    >
+                        Cancel
+                    </button>
+                    <button
+                        onclick="confirmTransaction()"
+                        id="confirm-button"
+                        class="bg-gradient-to-r from-blue-600 to-indigo-600 text-white py-2 px-4 rounded-xl font-bold hover:from-blue-700 hover:to-indigo-700 focus:outline-none focus:ring-3 focus:ring-blue-500 focus:ring-offset-2 transition-all duration-300 shadow-lg"
+                    >
+                        Confirm
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/script.js"></script>
+</body>
+</html>
