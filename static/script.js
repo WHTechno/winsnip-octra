@@ -23,23 +23,27 @@ const elements = {
     encrypted: document.getElementById('encrypted'),
     nonce: document.getElementById('nonce'),
     pendingTxs: document.getElementById('pending_txs'),
+    totalBalance: document.getElementById('total-balance'),
     
     // Tabs
     sendTab: document.getElementById('send-tab'),
     privateTab: document.getElementById('private-tab'),
     encryptTab: document.getElementById('encrypt-tab'),
     claimTab: document.getElementById('claim-tab'),
+    multiTab: document.getElementById('multi-tab'),
     
     // Form Views
     sendFormView: document.getElementById('send-form-view'),
     privateFormView: document.getElementById('private-form-view'),
     encryptFormView: document.getElementById('encrypt-form-view'),
     claimFormView: document.getElementById('claim-form-view'),
+    multiFormView: document.getElementById('multi-form-view'),
     
     // Send Form
-    sendForm: document.getElementById('send-form-view'),
+    sendForm: document.getElementById('send-form'),
     toAddress: document.getElementById('to_address'),
     amount: document.getElementById('amount'),
+    message: document.getElementById('message'),
     sendButton: document.getElementById('send-button'),
     
     // Private Form
@@ -50,10 +54,17 @@ const elements = {
     // Encrypt Form
     encryptAmount: document.getElementById('encrypt_amount'),
     encryptButton: document.getElementById('encrypt-button'),
+    decryptAmount: document.getElementById('decrypt_amount'),
+    decryptButton: document.getElementById('decrypt-button'),
     
     // Claim Form
     pendingTransfers: document.getElementById('pending-transfers'),
     noPendingTransfers: document.getElementById('no-pending-transfers'),
+    
+    // Multi-Send Form
+    multiRecipients: document.getElementById('multi-recipients'),
+    addRecipientBtn: document.getElementById('add-recipient'),
+    multiSendButton: document.getElementById('multi-send-button'),
     
     // Transactions
     transactions: document.getElementById('transactions'),
@@ -62,7 +73,14 @@ const elements = {
     confirmationModal: document.getElementById('confirmation-modal'),
     confirmAmount: document.getElementById('confirm-amount'),
     confirmAddress: document.getElementById('confirm-address'),
-    confirmButton: document.getElementById('confirm-button')
+    confirmButton: document.getElementById('confirm-button'),
+    confirmType: document.getElementById('confirm-type'),
+    
+    // Multi-Send Modal
+    multiConfirmModal: document.getElementById('multi-confirm-modal'),
+    multiConfirmTotal: document.getElementById('multi-confirm-total'),
+    multiConfirmCount: document.getElementById('multi-confirm-count'),
+    multiConfirmButton: document.getElementById('multi-confirm-button')
 };
 
 // Initialize the app
@@ -73,14 +91,20 @@ document.addEventListener('DOMContentLoaded', () => {
     elements.sendButton.addEventListener('click', sendTransaction);
     elements.privateSendButton.addEventListener('click', sendPrivateTransaction);
     elements.encryptButton.addEventListener('click', encryptBalance);
+    elements.decryptButton.addEventListener('click', decryptBalance);
     elements.confirmButton.addEventListener('click', confirmTransaction);
+    elements.addRecipientBtn.addEventListener('click', addRecipientField);
+    elements.multiSendButton.addEventListener('click', prepareMultiSend);
+    elements.multiConfirmButton.addEventListener('click', executeMultiSend);
     
     // Tab switching
     elements.sendTab.addEventListener('click', () => switchTab('send'));
     elements.privateTab.addEventListener('click', () => switchTab('private'));
     elements.encryptTab.addEventListener('click', () => switchTab('encrypt'));
     elements.claimTab.addEventListener('click', () => switchTab('claim'));
+    elements.multiTab.addEventListener('click', () => switchTab('multi'));
     
+    // Check for saved wallet
     const savedWallet = localStorage.getItem('octraWallet');
     if (savedWallet) {
         try {
@@ -111,11 +135,13 @@ function switchTab(tab) {
     elements.privateTab.classList.remove('border-indigo-500', 'text-indigo-600');
     elements.encryptTab.classList.remove('border-indigo-500', 'text-indigo-600');
     elements.claimTab.classList.remove('border-indigo-500', 'text-indigo-600');
+    elements.multiTab.classList.remove('border-indigo-500', 'text-indigo-600');
     
     elements.sendFormView.classList.add('hidden');
     elements.privateFormView.classList.add('hidden');
     elements.encryptFormView.classList.add('hidden');
     elements.claimFormView.classList.add('hidden');
+    elements.multiFormView.classList.add('hidden');
     
     // Activate selected tab
     if (tab === 'send') {
@@ -131,6 +157,105 @@ function switchTab(tab) {
         elements.claimTab.classList.add('border-indigo-500', 'text-indigo-600');
         elements.claimFormView.classList.remove('hidden');
         fetchPendingTransfers();
+    } else if (tab === 'multi') {
+        elements.multiTab.classList.add('border-indigo-500', 'text-indigo-600');
+        elements.multiFormView.classList.remove('hidden');
+    }
+}
+
+// Add recipient field for multi-send
+function addRecipientField() {
+    const recipientDiv = document.createElement('div');
+    recipientDiv.className = 'recipient-field flex space-x-4 mb-4';
+    recipientDiv.innerHTML = `
+        <input type="text" placeholder="Address" class="flex-1 p-2 border rounded" required>
+        <input type="number" step="0.000001" placeholder="Amount" class="w-1/4 p-2 border rounded" required>
+        <input type="text" placeholder="Message (optional)" class="flex-1 p-2 border rounded">
+        <button type="button" class="remove-recipient bg-red-500 text-white px-3 rounded hover:bg-red-600">×</button>
+    `;
+    elements.multiRecipients.appendChild(recipientDiv);
+    
+    // Add event listener to remove button
+    recipientDiv.querySelector('.remove-recipient').addEventListener('click', () => {
+        recipientDiv.remove();
+    });
+}
+
+// Prepare multi-send confirmation
+function prepareMultiSend() {
+    const recipientFields = elements.multiRecipients.querySelectorAll('.recipient-field');
+    if (recipientFields.length === 0) {
+        showError('Please add at least one recipient');
+        return;
+    }
+
+    let totalAmount = 0;
+    const recipients = [];
+    
+    recipientFields.forEach(field => {
+        const inputs = field.querySelectorAll('input');
+        const address = inputs[0].value.trim();
+        const amount = parseFloat(inputs[1].value);
+        const message = inputs[2].value.trim();
+        
+        if (!address || !amount || amount <= 0) {
+            showError('Please fill all required fields for each recipient');
+            return;
+        }
+        
+        totalAmount += amount;
+        recipients.push({
+            to: address,
+            amount: amount,
+            message: message || undefined
+        });
+    });
+
+    pendingTransaction = {
+        type: 'multi',
+        recipients: recipients,
+        totalAmount: totalAmount
+    };
+
+    elements.multiConfirmTotal.textContent = totalAmount.toFixed(6);
+    elements.multiConfirmCount.textContent = recipients.length;
+    elements.multiConfirmModal.classList.remove('hidden');
+}
+
+// Execute multi-send transaction
+async function executeMultiSend() {
+    if (!pendingTransaction || pendingTransaction.type !== 'multi') return;
+    
+    showLoading();
+    elements.multiConfirmModal.classList.add('hidden');
+    
+    try {
+        const response = await fetch('/api/multi_send', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                recipients: pendingTransaction.recipients
+            })
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.detail || 'Multi-send failed');
+        }
+
+        const data = await response.json();
+        showSuccess(`Sent ${data.success_count} transactions! ${data.failed_count > 0 ? `(${data.failed_count} failed)` : ''}`);
+        
+        // Clear form
+        elements.multiRecipients.innerHTML = '';
+        addRecipientField(); // Add one empty field
+        
+        await fetchWallet();
+    } catch (error) {
+        showError(error.message);
+    } finally {
+        hideLoading();
+        pendingTransaction = null;
     }
 }
 
@@ -225,7 +350,7 @@ async function fetchPendingTransfers() {
     if (!walletLoaded) return;
     showLoading();
     try {
-        const response = await fetch('/api/pending_private_transfers');
+        const response = await fetch('/api/pending_transfers');
         if (!response.ok) {
             const errorData = await response.json();
             throw new Error(errorData.detail || 'Failed to fetch pending transfers');
@@ -250,8 +375,10 @@ function updateWalletUI(data) {
     const encrypted = parseFloat(data.encrypted_balance.encrypted);
     elements.encrypted.textContent = isNaN(encrypted) ? '0.000000' : encrypted.toFixed(6);
 
+    const total = parseFloat(data.encrypted_balance.total);
+    elements.totalBalance.textContent = isNaN(total) ? '0.000000' : total.toFixed(6);
+
     elements.nonce.textContent = data.nonce ?? '0';
-    elements.pendingTxs.textContent = (data.pending_transactions?.length || 0).toString();
     renderTransactions(data.transactions || []);
 }
 
@@ -309,7 +436,7 @@ function renderPendingTransfers(transfers) {
     
     elements.noPendingTransfers.classList.add('hidden');
     elements.pendingTransfers.innerHTML = transfers.map((transfer, index) => {
-        const amount = transfer.decrypted_amount ? transfer.decrypted_amount.toFixed(6) : 'Unknown';
+        const amount = transfer.amount ? transfer.amount.toFixed(6) : 'Unknown';
         return `
         <div class="p-3 border-b border-gray-200">
             <div class="flex justify-between items-center">
@@ -330,14 +457,17 @@ async function sendTransaction(event) {
     event.preventDefault();
     const to = elements.toAddress.value.trim();
     const amount = parseFloat(elements.amount.value);
+    const message = elements.message.value.trim();
+    
     if (!to || !amount || amount <= 0) {
         showError('Please enter a valid address and amount');
         return;
     }
 
-    pendingTransaction = { to, amount, type: 'public' };
+    pendingTransaction = { to, amount, message, type: 'public' };
     elements.confirmAmount.textContent = amount.toFixed(6);
     elements.confirmAddress.textContent = to.substring(0, 10) + '...';
+    elements.confirmType.textContent = 'Public Transaction';
     elements.confirmationModal.classList.remove('hidden');
 }
 
@@ -353,6 +483,7 @@ async function sendPrivateTransaction() {
     pendingTransaction = { to, amount, type: 'private' };
     elements.confirmAmount.textContent = amount.toFixed(6);
     elements.confirmAddress.textContent = to.substring(0, 10) + '...';
+    elements.confirmType.textContent = 'Private Transfer';
     elements.confirmationModal.classList.remove('hidden');
 }
 
@@ -387,11 +518,42 @@ async function encryptBalance() {
     }
 }
 
+// Decrypt balance
+async function decryptBalance() {
+    const amount = parseFloat(elements.decryptAmount.value);
+    if (!amount || amount <= 0) {
+        showError('Please enter a valid amount');
+        return;
+    }
+
+    showLoading();
+    try {
+        const response = await fetch('/api/decrypt_balance', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ amount })
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.detail || 'Decryption failed');
+        }
+
+        const data = await response.json();
+        showSuccess(`Balance decrypted! TX: ${data.tx_hash}`);
+        await fetchWallet();
+    } catch (error) {
+        showError(error.message);
+    } finally {
+        hideLoading();
+    }
+}
+
 // Claim transfer
 async function claimTransfer(transferId) {
     showLoading();
     try {
-        const response = await fetch('/api/claim_private_transfer', {
+        const response = await fetch('/api/claim_transfer', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ transfer_id: transferId })
@@ -425,7 +587,7 @@ async function confirmTransaction() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(pendingTransaction)
             });
-        } else {
+        } else if (pendingTransaction.type === 'private') {
             response = await fetch('/api/private_transfer', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -442,6 +604,7 @@ async function confirmTransaction() {
         showSuccess(`Transaction sent! ID: ${data.tx_hash || data.transfer_id}`);
         elements.toAddress.value = '';
         elements.amount.value = '';
+        elements.message.value = '';
         elements.privateTo.value = '';
         elements.privateAmount.value = '';
         await fetchWallet();
@@ -489,7 +652,10 @@ function showLoading() {
     if (elements.sendButton) elements.sendButton.disabled = true;
     if (elements.privateSendButton) elements.privateSendButton.disabled = true;
     if (elements.encryptButton) elements.encryptButton.disabled = true;
+    if (elements.decryptButton) elements.decryptButton.disabled = true;
     if (elements.confirmButton) elements.confirmButton.disabled = true;
+    if (elements.multiSendButton) elements.multiSendButton.disabled = true;
+    if (elements.multiConfirmButton) elements.multiConfirmButton.disabled = true;
 }
 
 function hideLoading() {
@@ -498,7 +664,10 @@ function hideLoading() {
     if (elements.sendButton) elements.sendButton.disabled = false;
     if (elements.privateSendButton) elements.privateSendButton.disabled = false;
     if (elements.encryptButton) elements.encryptButton.disabled = false;
+    if (elements.decryptButton) elements.decryptButton.disabled = false;
     if (elements.confirmButton) elements.confirmButton.disabled = false;
+    if (elements.multiSendButton) elements.multiSendButton.disabled = false;
+    if (elements.multiConfirmButton) elements.multiConfirmButton.disabled = false;
 }
 
 function showError(message) {
@@ -517,4 +686,6 @@ function showWalletView() {
     elements.welcomeView.classList.add('hidden');
     elements.walletView.classList.remove('hidden');
     walletLoaded = true;
+    // Add initial recipient field for multi-send
+    addRecipientField();
 }
